@@ -1,15 +1,11 @@
-
-
 #include <iostream>
 #include <map>
 #include <string>
 #include <vector>
 
-
 int startAddress,locctr = 0,length;
 char line[70],label[9],opcode[8],operand[9],programName[9];
 FILE *file, *symTab;
-
 
 struct instructionInfo {
     std::string code;
@@ -20,6 +16,7 @@ struct SYMTAB{
     char symbol[10];
     int addr;
 };
+
 struct LITTAB{
     char literal[10];
     int operand = 0x000000;
@@ -199,7 +196,7 @@ void processLine()
     }
     opcode[indx] = '\0';
 
-    for (indx = 0; i < 27 && endOfLine == false; i++) {
+    for (indx = 0; (i < 27) && (endOfLine == false); i++) {
         if (line[i] == '\n') {
             break;
         }
@@ -273,8 +270,8 @@ void PASS1(FILE *input, FILE *inter) {
         fprintf(inter,"%s", line);
         fgets(line,70,input);
     }
-    fprintf(symTab, "CSect   Symbol  Value   LENGTH  Flags:\n");
-    fprintf(symTab, "--------------------------------------\n");
+    fprintf(symTab, "CSect   Symbol  Value   LENGTH    Flags:\n");
+    fprintf(symTab, "----------------------------------------\n");
 
     processLine();
 
@@ -282,11 +279,11 @@ void PASS1(FILE *input, FILE *inter) {
         startAddress=atoi(operand);
         locctr=startAddress;
         strcpy(programName, label);
-        fprintf(symTab, "%-*s          ", 8, label);
+        fprintf(symTab, "%-*s          ", 14, label);
         flag = true;
 
         fprintf(inter,"%04X    %s",locctr, line);
-        fgets(line,27,input);
+        fgets(line,28,input);
     }
     else {
         programName[0]='\0';
@@ -301,7 +298,7 @@ void PASS1(FILE *input, FILE *inter) {
         else if(label[0]!='\0')checkLabel();
         fprintf(inter,"%04X    %s",locctr, line);
         checkOpcode();
-        fgets(line,27,input);
+        fgets(line,28,input);
         processLine();
     }
     fprintf(inter,"%s",line);
@@ -311,18 +308,20 @@ void PASS1(FILE *input, FILE *inter) {
     }
 
     for (int i = 0; i < SymbolTable.size(); ++i) {
-        fprintf(symTab, "        %-*s  %06X          R\n", 8, SymbolTable[i].symbol, SymbolTable[i].addr);
+        fprintf(symTab, "        %-*s%06X              R\n", 8, SymbolTable[i].symbol, SymbolTable[i].addr);
     }
     fprintf(symTab, "\nLiteralTable\n");
-    fprintf(symTab, "Name     Operand   Address  Length:\n");
+    fprintf(symTab, "Name    Operand Address Length:\n");
     fprintf(symTab, "---------------------------------------\n");
     for (int i = 0; i < LiteralTable.size(); ++i) {
-        fprintf(symTab, "%-*s ------      %06X      %i\n", 8, LiteralTable[i].literal, LiteralTable[i].address, LiteralTable[i].length);
+        fprintf(symTab, "%-*s------  %06X  %i\n", 8, LiteralTable[i].literal, LiteralTable[i].address, LiteralTable[i].length);
     }
-    
+
     fclose(inter);
     fclose(input);
 }
+
+
 
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
