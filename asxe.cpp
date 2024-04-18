@@ -1,10 +1,13 @@
+
+
 #include <iostream>
 #include <map>
 #include <string>
-# include <fstream>
+#include <vector>
 
-char opcode[10], operand[10], label[10], ch, temp1[10], temp2[20], temp3[20];
-int LC, start, length, s = -1, o = -1, i, j = 0, flag, size = 0, opd;
+
+int startAddress,locctr = 0,length;
+char line[70],label[9],opcode[8],operand[9],programName[9];
 FILE *file, *symTab;
 
 
@@ -13,13 +16,20 @@ struct instructionInfo {
     int format;
 };
 
-struct SYMTAB {
-    char label[10];
+struct SYMTAB{
+    char symbol[10];
     int addr;
-}ST[30];
+};
+struct LITTAB{
+    char literal[10];
+    int operand = 0x000000;
+    int address;
+    int length = 0;
+};
 
 typedef std::map<std::string, instructionInfo> OPTAB;
-typedef std::map<std::string, int> SymbolTable;
+std::vector<SYMTAB> SymbolTable;
+std::vector<LITTAB> LiteralTable;
 
 OPTAB generateOPTAB() {
     OPTAB opcodeTable;
@@ -124,157 +134,223 @@ OPTAB generateOPTAB() {
     return opcodeTable;
 }
 
-
-int calculateByteSize(const std::string& operand) {
-    if (operand.empty()) {
+int calcByteSize(const std::string& op) {
+    if (op.empty()) {
         return 0;
     }
-    if (operand[0] == 'C' || operand[0] == 'c') {
-        return operand.length() - 3;
+    if (op[0] == 'C' || op[0] == 'c') {
+        return op.length() - 3;
     } else {
-        return (operand.length() - 3) / 2;
+        return (op.length() - 3) / 2;
     }
 }
 
-/*void readLine() {
-    strcpy(temp1,"");
-    strcpy(temp2,"");
-    strcpy(temp3,"");
-    fscanf(file, "%s", temp1);
-    if (getc(file) != '\n') {
-        fscanf(file, "%s", temp2);
-        if (getc(file) != '\n') {
-            fscanf(file, "%s", temp3);
-        }
-    }
-    if (strcmp(temp1, "") != 0 && strcmp(temp2, "") == 0 && strcmp(temp3, "") == 0) {
-        strcpy(label, "");
-        strcpy(opcode, temp2);
-        strcpy(operand, "");
-    }
-    else if (strcmp(temp1, "") != 0 && strcmp(temp2, "") != 0 && strcmp(temp3, "") == 0) {
-        strcpy(label, "");
-        strcpy(opcode, temp2);
-        strcpy(operand, temp3);
-    }
-    else if (strcmp(temp1, "") != 0 && strcmp(temp2, "") != 0 && strcmp(temp3, "") != 0) {
-        strcpy(label, temp1);
-        strcpy(opcode, temp2);
-        strcpy(operand, temp3);
-    }
-}
-*/
+void checkOpcode(){
+    OPTAB opTab = generateOPTAB();
 
-void readLine() {
-    strcpy(label, "");
-    strcpy(opcode, "");
-    strcpy(operand, "");
-    fscanf(file, "%9s", label); // Read the label field
-    if (feof(file)) return; // Check for end-of-file
-    if (getc(file) != '\n') {
-        fscanf(file, "%9s", opcode); // Read the opcode field
-        if (feof(file)) return; // Check for end-of-file
-        if (getc(file) != '\n') {
-            fscanf(file, " %[^\n]s", operand); // Read the rest of the line as the operand field
+    int found=0;
+    if (opTab.find(opcode) != opTab.end()) {
+        locctr += opTab[opcode].format;
+        found = 1;
+    }
+    if(!found)
+    {
+        if(!strcmp(opcode,"WORD")) locctr+=3;
+        else if (!strcmp(opcode,"RESW"))locctr+=(3*atoi(operand));
+        else if (!strcmp(opcode,"RESB"))locctr+=atoi(operand);
+        else if (!strcmp(opcode, "BYTE")) {
+                    length = calcByteSize(operand);
+                    locctr += length;
         }
     }
 }
 
+void processLine()
+{
+    label[0]='\0';
+    int i;
+    int indx = 0;
+    bool endOfLine = false;
+    for (i = 0; i < 9; i++) {
+        if (line[i] == '\n') {
+            endOfLine = true;
+            break;
+        }
+        if (line[i] != ' '){
+            label[indx] = line[i];
+            indx++;
+        }
+        else if (line[i] == ' ') {
 
+            break;
+        }
+    }
+    label[indx] = '\0';
 
+    for (indx = 0; i < 17 && endOfLine == false; i++) {
+        if (line[i] == '\n') {
+            endOfLine = true;
+            break;
+        }
+        if (line[i] != ' '){
+            opcode[indx] = line[i];
+            indx++;
+        }
+    }
+    opcode[indx] = '\0';
 
-
-void firstPass(FILE* file, SymbolTable& SYMTAB, OPTAB opcodeTable) {
-
-
-    std::string sourceFilename = "sourcefile"; // Replace with actual source file name
-
-        FILE* intermediateFile = fopen((sourceFilename + ".int").c_str(), "w");
-        if (intermediateFile == nullptr) {
-            std::cerr << "Error: Unable to create intermediate code file " << sourceFilename + ".int" << std::endl;
-            return;
+    for (indx = 0; i < 27 && endOfLine == false; i++) {
+        if (line[i] == '\n') {
+            break;
         }
 
-        // Open listing file for writing
-        FILE* listingFile = fopen((sourceFilename + ".lst").c_str(), "w");
-        if (listingFile == nullptr) {
-            std::cerr << "Error: Unable to create listing file " << sourceFilename + ".lst" << std::endl;
-            fclose(intermediateFile); // Close intermediate file before returning
-            return;
+        if (line[i] != ' '){
+            operand[indx] = line[i];
+            indx++;
         }
+    }
+    operand[indx] = '\0';
 
-    fscanf(file, "%s%s%x", label, opcode, &opd);
-    if (strcmp(opcode, "START") == 0) {
-        start = opd;
-        LC = start;
-        fprintf(intermediateFile, "%s\t%s\t%x\n", label, opcode,opd);
-        //readLine();
+}
+
+void checkLabel()
+{
+    bool labelExists = false;
+
+    for (auto& symTabObj : SymbolTable) {
+        if (std::strcmp(symTabObj.symbol, label) == 0) {
+            symTabObj.addr = -1;
+            labelExists = true;
+            break;
+        }
+    }
+
+    if (!labelExists) {
+        SYMTAB symTabObj;
+        std::strcpy(symTabObj.symbol, label);
+        symTabObj.addr = locctr;
+        SymbolTable.push_back(symTabObj);
+    }
+}
+
+void checkLiteral() {
+    char temp[8];
+    int i;
+    int literalLength = 0;
+    for (i = 0; i < strlen(opcode); i++) {
+        if (opcode[i + 3] == '\'') {
+            break;
+        }
+        temp[i] = opcode[i + 3];
+        literalLength++;
+    }
+    temp[i] = '\0';
+
+    bool literalExists = false;
+
+    for (auto& litTabObj : LiteralTable) {
+        if (std::strcmp(litTabObj.literal, temp) == 0) {
+            litTabObj.address = -1;
+            literalExists = true;
+            break;
+        }
+    }
+
+    if (!literalExists) {
+        LITTAB litTabObj;
+        std::strcpy(litTabObj.literal, temp);
+        litTabObj.address = locctr;
+        litTabObj.length = literalLength;
+        LiteralTable.push_back(litTabObj);
+    }
+}
+
+void PASS1(FILE *input, FILE *inter) {
+
+    bool flag = false;
+    fgets(line,70,input);
+    if (line[0] == '.') {
+        fprintf(inter,"%s", line);
+        fgets(line,70,input);
+    }
+    fprintf(symTab, "CSect   Symbol  Value   LENGTH  Flags:\n");
+    fprintf(symTab, "--------------------------------------\n");
+
+    processLine();
+
+    if(!strcmp(opcode,"START")) {
+        startAddress=atoi(operand);
+        locctr=startAddress;
+        strcpy(programName, label);
+        fprintf(symTab, "%-*s          ", 8, label);
+        flag = true;
+
+        fprintf(inter,"%04X    %s",locctr, line);
+        fgets(line,27,input);
     }
     else {
-        LC = 0;
+        programName[0]='\0';
+        startAddress=0;
+        locctr=0;
     }
-    readLine(); // cahnged
-    while (strcmp(opcode, "END") != 0) {
-        fprintf(intermediateFile, "%x\t%s\t%s\t%s\n", LC, label, opcode, operand);
-        if (strcmp(label, "") != 0) {
-            for (i = 0; i <= s; i++) {
-                if (strcmp(label, "") != 0) { // Added condition to check if label is not empty
-                    for (i = 0; i <= s; i++) {
-                        if (strcmp(ST[i].label, label) == 0) {
-                            printf("Error, duplicate Symbol");
-                            exit(0);
-                        }
-                    }
-                }
-            }
-            s++;
-            strcpy(ST[s].label, label);
-            ST[s].addr = LC;
-        }
-        flag = 0;
-        if (opcodeTable.find(opcode) != opcodeTable.end()) {
-            LC += opcodeTable[opcode].format;
-            size += opcodeTable[opcode].format;
-            flag = 1;
-        }
-        if (flag == 0) {
-            if (strcmp(opcode, "WORD") == 0) {
-                LC += 0x3;
-                size += 3;
-            } else if (strcmp(opcode, "RESW") == 0) {
-                LC += (0x3 * (atoi(operand)));
-            } else if (strcmp(opcode, "RESB") == 0) {
-                LC += (atoi(operand));
-            } else if (strcmp(opcode, "BYTE") == 0) {
-                length = calculateByteSize(operand);
-                LC += length;
-                size += length;
-            }
-        }
-        readLine();
+
+    while(strcmp(opcode,"END")!=0)
+    {
+        processLine();
+        if(label[0]=='*')checkLiteral();
+        else if(label[0]!='\0')checkLabel();
+        fprintf(inter,"%04X    %s",locctr, line);
+        checkOpcode();
+        fgets(line,27,input);
+        processLine();
     }
-    fprintf(intermediateFile, "\t%s\t%s\t%s\n", label, opcode, operand);
-    for (i = 0; i <=s; i++) {
-        fprintf(symTab, "%s\t%x", ST[i].label, ST[i].addr);
-        if (i != s)
-            fprintf(symTab, "\n");
+    fprintf(inter,"%s",line);
+    if (flag) {
+        length = locctr - startAddress;
+        fprintf(symTab, "%06X\n", length);
     }
-    //TODO change this to fprintf(listingfile, "%x\n%x", LC - start, size);
-    fclose(intermediateFile);
+
+    for (int i = 0; i < SymbolTable.size(); ++i) {
+        fprintf(symTab, "        %-*s  %06X          R\n", 8, SymbolTable[i].symbol, SymbolTable[i].addr);
+    }
+    fprintf(symTab, "\nLiteralTable\n");
+    fprintf(symTab, "Name     Operand   Address  Length:\n");
+    fprintf(symTab, "---------------------------------------\n");
+    for (int i = 0; i < LiteralTable.size(); ++i) {
+        fprintf(symTab, "%-*s ------      %06X      %i\n", 8, LiteralTable[i].literal, LiteralTable[i].address, LiteralTable[i].length);
+    }
+    
+    fclose(inter);
+    fclose(input);
 }
 
-
 int main(int argc, char* argv[]) {
-    OPTAB opcodeTab = generateOPTAB();
-    for (i = 1; i < argc; ++i) {
-        SymbolTable  symTab;
+    for (int i = 1; i < argc; ++i) {
         file = fopen(argv[i], "r");
         if (file == nullptr) {
             std::cerr << "Error: Unable to open file " << argv[i] << std::endl;
-            continue; // Skip to the next file if unable to open
+            continue;
         }
-        firstPass(file, symTab, opcodeTab);
+        std::string filename = std::string(argv[i]) + ".int";
+        FILE* intermediateFile = fopen(filename.c_str(), "w");
+        if (intermediateFile == nullptr) {
+            std::cerr << "Error: Unable to create intermediate code file ";
+        }
+
+        filename = std::string(argv[i]) + ".l";
+        FILE* listingFile = fopen(filename.c_str(), "w");
+        if (listingFile == nullptr) {
+            std::cerr << "Error: Unable to create listing file ";
+            fclose(intermediateFile);
+        }
+        filename = std::string(argv[i]) + ".st";
+        symTab = fopen(filename.c_str(), "w");
+        if (listingFile == nullptr) {
+            std::cerr << "Error: Unable to create listing file ";
+            fclose(intermediateFile);
+        }
+        PASS1(file, intermediateFile);
         fclose(file);
     }
-    return 0;
+    length= locctr - startAddress;
 }
