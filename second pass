@@ -305,7 +305,7 @@ void PASS1(FILE *input, FILE *inter) {
         fgets(line,28,input);
         processLine();
     }
-    fprintf(inter,"%s",line);
+    fprintf(inter,"        %s",line);
     if (flag) {
         length = locctr - startAddress;
         fprintf(symTab, "%06X\n", length);
@@ -480,10 +480,8 @@ void PASS2(FILE *intFile, FILE *listFile) {
         flag = true;
 
         fprintf(listFile, "%s", line);
-        printf("True");
         fgets(line, 36, intFile);
     } else {
-        printf("false");
         programName[0] = '\0';
         startAddress = 0;
         locctr = 0;
@@ -553,3 +551,71 @@ int main(int argc, char* argv[]) {
     }
 }
 
+
+
+
+
+/*
+
+void PASS2(FILE *inter, FILE *output) {
+    fgets(line,70,inter);
+    if (line[0] == '.') {
+        fprintf(inter,"%s", line);
+        fgets(line,70,inter);
+    }
+    char record[60],part[6],value[5];
+    int currtxtlen=0,foundopcode,foundoperand,chk,operandaddr,recaddr=0;
+    fgets(line,28,inter);
+
+    processLine();
+    if(!strcmp(opcode,"START")) fgets(line,28,inter);
+
+    fprintf(output,"\nH^ %s ^ %d ^ %d ",programName,startAddress,length);
+    recaddr=startAddress; record[0]='\0';
+
+    while(strcmp(line,"END")!=0) {
+        operandaddr=foundoperand=foundopcode=0;
+        value[0]=part[0]= '\0';
+        processLine();
+
+        for(chk=0; chk<3; chk++) {
+            if(opTab.find(opcode) != opTab.end()) {
+                foundopcode=1;
+                strcpy(part,opTab[opcode].code.c_str());
+
+                if(operand[0]!='\0') {
+                    for(chk=0; chk<SymbolTable.size(); chk++) {
+                        if(!strcmp(SymbolTable[chk].symbol,operand)) {
+                            operandaddr = SymbolTable[chk].addr;
+                        }
+                    }
+                    if(!foundoperand) {
+                        operandaddr = 0;
+                        strcat(part, "err");
+                    }
+                }
+            }
+        }
+        if(!foundopcode) {
+            if(strcmp(opcode,"BYTE")==0 || strcmp(opcode,"WORD")||strcmp(opcode,"RESB")) {
+                strcat(part,operand);
+            }
+        }
+
+
+            fprintf(output,"\nT^ %d ^%d %s",recaddr,currtxtlen,record);
+            recaddr+=currtxtlen;
+            currtxtlen=strlen(part);
+            strcpy(record,part);
+
+
+        fgets(line,28,inter);
+    }
+
+    fprintf(output,"\nT^ %d ^%d %s",recaddr,currtxtlen,record);
+    fprintf(output,"\nE^ %d\n",startAddress);
+
+    fclose(inter);
+    fclose(output);
+}
+*/
