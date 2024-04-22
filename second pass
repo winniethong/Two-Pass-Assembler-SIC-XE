@@ -6,8 +6,8 @@
 #include <map>
 #include <sstream>
 
-int startAddress,locctr = 0,length, baseReg = 0, xReg = 0, tReg = 0;
-char line[70],label[9],opcode[8],operand[9],programName[9], LC[8];
+int startAddress,locctr = 0,length, xReg = 0;
+char line[70],label[9],opcode[8],operand[18],programName[9], LC[8];
 FILE *file, *symTab;
 std::vector<std::string> objectCodes;
 
@@ -200,7 +200,7 @@ void processLine()
     }
     opcode[indx] = '\0';
 
-    for (indx = 0; (i < 27) && (endOfLine == false); i++) {
+    for (indx = 0; (i < 69) && (endOfLine == false); i++) {
         if (line[i] == '\n') {
             break;
         }
@@ -325,84 +325,104 @@ void PASS1(FILE *input, FILE *inter) {
     fclose(input);
 }
 
-
-std::string calculateObjectCode(const std::string& opcode, const std::string& operand) {
-    std::string objCode;
+int hexToInt(const char* hex) {
     std::stringstream ss;
+    ss << std::hex << hex;
+    int result;
+    ss >> result;
+    return result;
+}
+std::string intToHex(int num) {
+    std::ostringstream oss;
+    oss << std::hex << num;
+    return oss.str();
+}
+
+
+
+
+std::string calculateObjectCode() {
+    int i;
+    char objCode[8], objOperand[9], operand2[9];
+    objCode[0] = '\0';
+    objOperand[0] = '\0';
+    operand2[0] = '\0';
+    if (operand[0] == '#' || operand[0] == '@') {
+        for (i =1; i < strlen(operand); i++) {
+            operand2[i - 1] = operand[i];
+        }
+        operand2[i] = '\0';
+    }
+    else if (operand[0] == '=') {
+        return operand;
+    }
+    else {
+        strcpy(operand2, operand);
+    }
+
 
     // Find opcode in opTab
     bool opcodeFound = false;
-    std::string opcodeValue;
+    char opcodeValue[2];
     int format;
+    printf("%s\n",opcode);
     for (const auto& op : opTab) {
-        if (op.second.code == opcode) {
+        if (op.first == opcode) {
             opcodeFound = true;
-            opcodeValue = op.second.code;
+            opcodeValue[0] = op.second.code[0];
+            opcodeValue[1] = op.second.code[1];
             format = op.second.format;
             break;
         }
     }
 
+    bool commaEncountered = false;
+    int operandIndex = 0;
+    int address = 0;
     if (opcodeFound) {
-        // Calculate the addressing mode
-        char addressingMode;
-        if (operand.empty()) {
-            addressingMode = '0'; // No operand
-        } else if (operand[0] == '#') {
-            addressingMode = '1'; // Immediate addressing
-        } else if (operand[0] == '@') {
-            addressingMode = '2'; // Indirect addressing
-        } else {
-            addressingMode = '3'; // Direct addressing
+        for (int i = 0; operand2[i] != '\0'; ++i) {
+            if (operand2[i] != ',') {
+                objOperand[operandIndex++] = operand2[i];
+                commaEncountered = true;
+            }
+            else {
+                break;
+            }
         }
+        objOperand[operandIndex] = '\0';
 
-        // Construct object code based on the addressing mode and format
-        ss << std::setfill('0') << std::setw(2) << std::hex << std::uppercase << opcodeValue << addressingMode;
-
-        // For format 3/4 instructions, append operand address or displacement
-        if (format == 3 || format == 4) {
-            int disp;
-            if (operand[0] == '#') {
-                disp = std::stoi(operand.substr(1)); // Immediate value
-            } else {
-                std::string symbol;
-                if (operand[0] == '@') {
-                    symbol = operand.substr(1);
-                } else {
-                    symbol = operand;
-                }
-                bool foundSymbol = false;
-                for (const auto& sym : SymbolTable) {
-                    if (sym.symbol == symbol) {
-                        disp = sym.addr;
-                        foundSymbol = true;
-                        break;
-                    }
-                }
-                if (!foundSymbol) {
-                    // Handle error: symbol not found in symbol table
-                }
-            }
-
-            // Calculate relative displacement for format 3
-            if (format == 3) {
-                disp -= locctr + 3;
-            }
-
-            // Add displacement or address to object code
-            if (format == 3) {
-                ss << std::setfill('0') << std::setw(3) << std::hex << disp;
-            } else {
-                ss << std::setfill('0') << std::setw(5) << std::hex << disp;
+        bool symbolFound = false;
+        if (commaEncountered) {
+            xReg = 1;
+        }
+        printf("%s    ", objOperand);
+        for (int i = 0; i < SymbolTable.size(); ++i) {
+            if (std::strcmp(SymbolTable[i].symbol, objOperand) == 0) {
+                address = SymbolTable[i].addr;
+                address = address - hexToInt(LC);
+                symbolFound = true;
+                break;
             }
         }
 
-        objCode = ss.str();
-    } else {
-        // Handle error: opcode not found in opcode table
+        if (symbolFound) {
+            printf("Symbol found\n");
+            strcpy(objOperand, reinterpret_cast<const char *>(address));
+
+        }
+        else {
+            printf("Symbol not found\n");
+        }
+
     }
+    else if (strcmp(opcode, "BYTE")){
+        ;
+    }
+    else if (strcmp(opcode, "WORD")){
+        ;
+    }
+    return objOperand;
 
-    return objCode;
 }
 
 void processIntLine() {
@@ -464,7 +484,6 @@ void processIntLine() {
 
 
 void PASS2(FILE *intFile, FILE *listFile) {
-    bool flag = false;
     fgets(line, 70, intFile);
     if (line[0] == '.') {
         fprintf(listFile, "%s", line);
@@ -477,7 +496,6 @@ void PASS2(FILE *intFile, FILE *listFile) {
         startAddress = atoi(operand);
         locctr = startAddress;
         strcpy(programName, label);
-        flag = true;
 
         fprintf(listFile, "%s", line);
         fgets(line, 36, intFile);
@@ -488,19 +506,12 @@ void PASS2(FILE *intFile, FILE *listFile) {
     }
     while (strcmp(opcode, "END") != 0) {
         processIntLine();
-        fprintf(listFile,"%s", line);
-        if (strcmp(opcode, "BASE") == 0) {
-            //TODO set the base register equal to the value of operand's address (stored in our symbol table)
-        }
-        else if ((strcmp(opcode, "BYTE") == 0) || (strcmp(opcode, "WORD") == 0) || (strcmp(opcode, "RESW") == 0) || (strcmp(opcode, "RESB") == 0) || (strcmp(opcode, "BASE") == 0)) {
-            // do nothing in our code
-        }
-        else {
-            std::string objCode;
-            objCode = calculateObjectCode(opcode, operand);
-            fprintf(listFile,"%s", objCode.c_str());
-        }
-
+        fprintf(listFile, "%.*s", 35, line);
+        if (line[0] == '.' || label[0] == '*') {
+                fgets(line, 36, intFile);
+                processIntLine();
+            }
+        calculateObjectCode();
 
         fgets(line, 36, intFile);
         processIntLine();
@@ -553,69 +564,61 @@ int main(int argc, char* argv[]) {
 
 
 
+// Calculate the addressing mode
+char addressingMode;
+/*if (operand.empty()) {
+    addressingMode = '0'; // No operand
+} else if (operand[0] == '#') {
+    addressingMode = '1'; // Immediate addressing
+} else if (operand[0] == '@') {
+    addressingMode = '2'; // Indirect addressing
+} else {
+    addressingMode = '3'; // Direct addressing
+}
 
+// Construct object code based on the addressing mode and format
+//ss << std::setfill('0') << std::setw(2) << std::hex << std::uppercase << opcodeValue << addressingMode;
 
-/*
-
-void PASS2(FILE *inter, FILE *output) {
-    fgets(line,70,inter);
-    if (line[0] == '.') {
-        fprintf(inter,"%s", line);
-        fgets(line,70,inter);
-    }
-    char record[60],part[6],value[5];
-    int currtxtlen=0,foundopcode,foundoperand,chk,operandaddr,recaddr=0;
-    fgets(line,28,inter);
-
-    processLine();
-    if(!strcmp(opcode,"START")) fgets(line,28,inter);
-
-    fprintf(output,"\nH^ %s ^ %d ^ %d ",programName,startAddress,length);
-    recaddr=startAddress; record[0]='\0';
-
-    while(strcmp(line,"END")!=0) {
-        operandaddr=foundoperand=foundopcode=0;
-        value[0]=part[0]= '\0';
-        processLine();
-
-        for(chk=0; chk<3; chk++) {
-            if(opTab.find(opcode) != opTab.end()) {
-                foundopcode=1;
-                strcpy(part,opTab[opcode].code.c_str());
-
-                if(operand[0]!='\0') {
-                    for(chk=0; chk<SymbolTable.size(); chk++) {
-                        if(!strcmp(SymbolTable[chk].symbol,operand)) {
-                            operandaddr = SymbolTable[chk].addr;
-                        }
-                    }
-                    if(!foundoperand) {
-                        operandaddr = 0;
-                        strcat(part, "err");
-                    }
-                }
+// For format 3/4 instructions, append operand address or displacement
+if (format == 3 || format == 4) {
+    int disp;
+    if (operand[0] == '#') {
+        //disp = std::stoi(operand.substr(1)); // Immediate value
+    } else {
+        std::string symbol;
+        if (operand[0] == '@') {
+            //symbol = operand.substr(1);
+        } else {
+            symbol = operand;
+        }
+        bool foundSymbol = false;
+        for (const auto& sym : SymbolTable) {
+            if (sym.symbol == symbol) {
+                disp = sym.addr;
+                foundSymbol = true;
+                break;
             }
         }
-        if(!foundopcode) {
-            if(strcmp(opcode,"BYTE")==0 || strcmp(opcode,"WORD")||strcmp(opcode,"RESB")) {
-                strcat(part,operand);
-            }
+        if (!foundSymbol) {
+            // Handle error: symbol not found in symbol table
         }
-
-
-            fprintf(output,"\nT^ %d ^%d %s",recaddr,currtxtlen,record);
-            recaddr+=currtxtlen;
-            currtxtlen=strlen(part);
-            strcpy(record,part);
-
-
-        fgets(line,28,inter);
     }
 
-    fprintf(output,"\nT^ %d ^%d %s",recaddr,currtxtlen,record);
-    fprintf(output,"\nE^ %d\n",startAddress);
+    // Calculate relative displacement for format 3
+    if (format == 3) {
+        disp -= locctr + 3;
+    }
 
-    fclose(inter);
-    fclose(output);
+    // Add displacement or address to object code
+    if (format == 3) {
+        //ss << std::setfill('0') << std::setw(3) << std::hex << disp;
+    } else {
+        //ss << std::setfill('0') << std::setw(5) << std::hex << disp;
+    }
+}
+
+//objCode = ss.str();
+} else {
+// Handle error: opcode not found in opcode table
 }
 */
