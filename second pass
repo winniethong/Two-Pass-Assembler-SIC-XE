@@ -1,6 +1,5 @@
 #include <iostream>
 #include <fstream>
-#include <iomanip>
 #include <cstring>
 #include <vector>
 #include <map>
@@ -9,7 +8,6 @@
 int startAddress,locctr = 0,length, xReg = 0;
 char line[70],label[9],opcode[8],operand[18],programName[9], LC[8];
 FILE *file, *symTab;
-std::vector<std::string> objectCodes;
 
 struct instructionInfo {
     std::string code;
@@ -23,7 +21,7 @@ struct SYMTAB{
 
 struct LITTAB{
     char literal[10];
-    int operand = 0x000000;
+    //int operand = 0x000000;
     int address;
     int length = 0;
 };
@@ -339,8 +337,6 @@ std::string intToHex(int num) {
 }
 
 
-
-
 std::string calculateObjectCode() {
     int i;
     char objCode[8], objOperand[9], operand2[9];
@@ -365,7 +361,7 @@ std::string calculateObjectCode() {
     bool opcodeFound = false;
     char opcodeValue[2];
     int format;
-    printf("%s\n",opcode);
+    printf("Line: %s Opcode: %s ",LC,opcode);
     for (const auto& op : opTab) {
         if (op.first == opcode) {
             opcodeFound = true;
@@ -395,11 +391,12 @@ std::string calculateObjectCode() {
         if (commaEncountered) {
             xReg = 1;
         }
-        printf("%s    ", objOperand);
-        for (int i = 0; i < SymbolTable.size(); ++i) {
+        printf("Symbol to search for:(%s) Comparing to the following symbols: ", objOperand);
+        for (int i = 0; i < SymbolTable.size(); ++i) {\
+            printf("(%s), ",SymbolTable[i].symbol);
             if (std::strcmp(SymbolTable[i].symbol, objOperand) == 0) {
-                address = SymbolTable[i].addr;
-                address = address - hexToInt(LC);
+                //address = SymbolTable[i].addr;
+                //address = address - hexToInt(LC);
                 symbolFound = true;
                 break;
             }
@@ -407,19 +404,18 @@ std::string calculateObjectCode() {
 
         if (symbolFound) {
             printf("Symbol found\n");
-            strcpy(objOperand, reinterpret_cast<const char *>(address));
+            //strcpy(objOperand, reinterpret_cast<const char *>(address));
 
         }
         else {
             printf("Symbol not found\n");
         }
-
-    }
-    else if (strcmp(opcode, "BYTE")){
-        ;
-    }
-    else if (strcmp(opcode, "WORD")){
-        ;
+        if (strcmp(opcode, "BYTE")){
+            ; //implement later
+        }
+        else if (strcmp(opcode, "WORD")){
+            ; //implement later
+        }
     }
     return objOperand;
 
@@ -484,6 +480,12 @@ void processIntLine() {
 
 
 void PASS2(FILE *intFile, FILE *listFile) {
+
+    printf("Symbols in symtab during pass 2: \n");
+    for (int i = 0; i < SymbolTable.size(); ++i) {
+        printf( "Symbol:%s Address:%X\n", SymbolTable[i].symbol, SymbolTable[i].addr);
+    }
+
     fgets(line, 70, intFile);
     if (line[0] == '.') {
         fprintf(listFile, "%s", line);
@@ -510,8 +512,24 @@ void PASS2(FILE *intFile, FILE *listFile) {
         if (line[0] == '.' || label[0] == '*') {
                 fgets(line, 36, intFile);
                 processIntLine();
-            }
-        calculateObjectCode();
+        }
+
+        if (strcmp(opcode, "RESW") == 0){
+            // do nothing
+            printf("Line: %s Opcode: %s - No obj code calculation needed\n",LC,opcode);
+
+        }
+        else if (strcmp(opcode, "RESB") == 0){
+            // do nothing
+            printf("Line: %s Opcode: %s - No obj code calculation needed\n",LC,opcode);
+        }
+        else if (strcmp(opcode, "BASE") == 0){
+            // do nothing
+            printf("Line: %s Opcode: %s - No obj code calculation needed\n",LC,opcode);
+        }
+        else {
+            calculateObjectCode();
+        }
 
         fgets(line, 36, intFile);
         processIntLine();
@@ -522,103 +540,58 @@ void PASS2(FILE *intFile, FILE *listFile) {
     fclose(listFile);
 }
 
-
-
 int main(int argc, char* argv[]) {
     opTab = generateOPTAB();
     for (int i = 1; i < argc; ++i) {
+        std::string filename = argv[i];
+
+        size_t pos = filename.find_last_of(".");
+        std::string baseFilename = filename.substr(0, pos);
+
         file = fopen(argv[i], "r");
         if (file == nullptr) {
             std::cerr << "Error: Unable to open file " << argv[i] << std::endl;
             continue;
         }
-        std::string filename = std::string(argv[i]) + ".int";
+
+
+        filename = baseFilename + ".int";
         FILE* intermediateFile = fopen(filename.c_str(), "w");
         if (intermediateFile == nullptr) {
-            std::cerr << "Error: Unable to create intermediate code file ";
+            continue;
         }
 
-        filename = std::string(argv[i]) + ".l";
+        filename = baseFilename + ".l";
         FILE* listingFile = fopen(filename.c_str(), "w");
         if (listingFile == nullptr) {
-            std::cerr << "Error: Unable to create listing file ";
+            std::cerr << "Error: Unable to create listing file " << filename << std::endl;
             fclose(intermediateFile);
+            fclose(file);
+            continue;
         }
-        filename = std::string(argv[i]) + ".st";
+
+        filename = baseFilename + ".st";
         symTab = fopen(filename.c_str(), "w");
         if (symTab == nullptr) {
-            std::cerr << "Error: Unable to create listing file ";
+            std::cerr << "Error: Unable to create symbol table file " << filename << std::endl;
+            fclose(listingFile);
             fclose(intermediateFile);
+            fclose(file);
+            continue;
         }
+
         PASS1(file, intermediateFile);
-        filename = std::string(argv[i]) + ".int";
+        filename = baseFilename + ".int";
         FILE* intFile = fopen(filename.c_str(), "r");
         if (intFile == nullptr) {
             std::cerr << "Error: Unable to create intermediate code file ";
         }
         PASS2(intFile, listingFile);
         fclose(file);
+        fclose(listingFile);
+        fclose(intermediateFile);
+        fclose(file);
 
     }
+    return 0;
 }
-
-
-
-// Calculate the addressing mode
-char addressingMode;
-/*if (operand.empty()) {
-    addressingMode = '0'; // No operand
-} else if (operand[0] == '#') {
-    addressingMode = '1'; // Immediate addressing
-} else if (operand[0] == '@') {
-    addressingMode = '2'; // Indirect addressing
-} else {
-    addressingMode = '3'; // Direct addressing
-}
-
-// Construct object code based on the addressing mode and format
-//ss << std::setfill('0') << std::setw(2) << std::hex << std::uppercase << opcodeValue << addressingMode;
-
-// For format 3/4 instructions, append operand address or displacement
-if (format == 3 || format == 4) {
-    int disp;
-    if (operand[0] == '#') {
-        //disp = std::stoi(operand.substr(1)); // Immediate value
-    } else {
-        std::string symbol;
-        if (operand[0] == '@') {
-            //symbol = operand.substr(1);
-        } else {
-            symbol = operand;
-        }
-        bool foundSymbol = false;
-        for (const auto& sym : SymbolTable) {
-            if (sym.symbol == symbol) {
-                disp = sym.addr;
-                foundSymbol = true;
-                break;
-            }
-        }
-        if (!foundSymbol) {
-            // Handle error: symbol not found in symbol table
-        }
-    }
-
-    // Calculate relative displacement for format 3
-    if (format == 3) {
-        disp -= locctr + 3;
-    }
-
-    // Add displacement or address to object code
-    if (format == 3) {
-        //ss << std::setfill('0') << std::setw(3) << std::hex << disp;
-    } else {
-        //ss << std::setfill('0') << std::setw(5) << std::hex << disp;
-    }
-}
-
-//objCode = ss.str();
-} else {
-// Handle error: opcode not found in opcode table
-}
-*/
