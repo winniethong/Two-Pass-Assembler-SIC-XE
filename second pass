@@ -5,7 +5,7 @@
 #include <map>
 #include <sstream>
 
-int startAddress,locctr = 0,length, xReg = 0;
+int startAddress,locctr = 0,length;
 char line[70],label[9],opcode[8],operand[18],programName[9], LC[8];
 FILE *file, *symTab;
 
@@ -17,6 +17,7 @@ struct instructionInfo {
 struct SYMTAB{
     char symbol[10];
     int addr;
+    int base;
 };
 
 struct LITTAB{
@@ -228,6 +229,7 @@ void checkLabel()
         SYMTAB symTabObj;
         std::strcpy(symTabObj.symbol, label);
         symTabObj.addr = locctr;
+        symTabObj.base = 0;
         SymbolTable.push_back(symTabObj);
     }
 }
@@ -338,7 +340,10 @@ std::string intToHex(int num) {
 
 
 std::string calculateObjectCode() {
+    bool baseChanged = false;
     int i;
+    int nFlag = -1, iFlag = -1, xFlag = -1, bFlag = -1, pFlag = -1, eFlag = -1;
+    SYMTAB symb;
     char objCode[8], objOperand[8], operand2[8];
     objCode[0] = '\0';
     objOperand[0] = '\0';
@@ -347,19 +352,32 @@ std::string calculateObjectCode() {
         for (i = 1; i < strlen(operand); i++) {
             operand2[i - 1] = operand[i];
         }
-        operand2[i-1] = '\0';
+        operand2[i -1] = '\0';
+        if (operand[0] == '#') {
+            nFlag = 0;
+            iFlag = 1;
+            xFlag = 0;
+        }
+        else if (operand[0] == '@') {
+            nFlag = 1;
+            iFlag = 0;
+            xFlag = 0;
+        }
     }
     else if (operand[0] == '=') {
-        return operand; // change this later
+        return operand; //TODO change this later
     }
     else {
         strcpy(operand2, operand);
+        nFlag = 1;
+        iFlag = 1;
     }
 
     int isOnlyDigits = 1;
     if (operand2[0] == '\0'){
         printf("No operand to check\n");
         return operand2;
+        //TODO return none
     }
     for (i = 0; operand2[i] != '\0'; i++) {
         if (!isdigit(operand2[i])) {
@@ -371,73 +389,122 @@ std::string calculateObjectCode() {
         strncpy(objOperand, operand2, sizeof(objOperand)-1);
         objOperand[sizeof(objOperand)-1] = '\0';
         printf("Only digits: %s - Don't check for symbol\n", objOperand);
-        return objOperand;
+        return objOperand; //TODO return none
     }
 
 
     // Find opcode in opTab
     bool opcodeFound = false;
     char opcodeValue[2];
-    // int format; implement later
+    int format;
     printf("Line: %s Opcode: %s ",LC,opcode);
     for (const auto& op : opTab) {
         if (op.first == opcode) {
             opcodeFound = true;
             opcodeValue[0] = op.second.code[0];
             opcodeValue[1] = op.second.code[1];
-            //format = op.second.format; implement later
+            format = op.second.format;
             break;
         }
+    }
+    if (format == 3) {
+        eFlag = 0;
+    }
+    else if (format == 4) {
+        eFlag = 1;
+        bFlag = 0;
+        pFlag = 0;
     }
 
     bool commaEncountered = false;
     int operandIndex = 0;
-    // int address = 0; implement later
+    int address = 0;
+    for (int i = 0; operand2[i] != '\0'; ++i) {
+        if (operand2[i] != ',') {
+            objOperand[operandIndex++] = operand2[i];
+        } else {
+            commaEncountered = true;
+            break;
+        }
+    }
+    objOperand[operandIndex] = '\0';
+
+    if (commaEncountered) {
+        xFlag = 1;
+    }
+    else {
+        xFlag = 0;
+    }
+
     if (opcodeFound) {
-
-        for (int i = 0; operand2[i] != '\0'; ++i) {
-            if (operand2[i] != ',') {
-                objOperand[operandIndex++] = operand2[i];
-                commaEncountered = true;
-            }
-            else {
-                break;
-            }
-        }
-        objOperand[operandIndex] = '\0';
-
         bool symbolFound = false;
-        if (commaEncountered) {
-            //xFlag = 1;
-        }
         printf("Symbol to search for:(%s) Comparing to the following symbols: ", objOperand);
         for (int i = 0; i < SymbolTable.size(); ++i) {
-            printf("(%s), ",SymbolTable[i].symbol);
+            printf("(%s), ", SymbolTable[i].symbol);
+            symb = SymbolTable[i];
             if (std::strcmp(SymbolTable[i].symbol, objOperand) == 0) {
-                //address = SymbolTable[i].addr; implement later
-                //address = address - hexToInt(LC); implement later
                 symbolFound = true;
+                if (bFlag == -1) {
+                    bFlag = symb.base;
+                    if (bFlag == 1) {
+                        pFlag = 0;
+                    }
+                    else {
+                        pFlag = 1;
+                    }
+                }
                 break;
             }
         }
 
         if (symbolFound) {
             printf("Symbol found\n");
+            address = symb.addr;
+            address -= hexToInt(LC);
             //strcpy(objOperand, reinterpret_cast<const char *>(address));
 
         }
         else {
             printf("Symbol not found\n");
         }
-        if (strcmp(opcode, "BYTE")){
-            ; //implement later
-        }
-        else if (strcmp(opcode, "WORD")){
-            ; //implement later
+        //calc first two obj code nums
+        //objCode[0] = opcodeValue[0];
+
+    }
+    else if (strcmp(opcode, "BASE") == 0){
+        for (int i = 0; i < SymbolTable.size(); ++i) {
+            if (std::strcmp(SymbolTable[i].symbol, objOperand) == 0) {
+                SymbolTable[i].base = 1;
+                baseChanged = true;
+                break;
+            }
         }
     }
+    else if (strcmp(opcode, "NOBASE") == 0){
+        for (int i = 0; i < SymbolTable.size(); ++i) {
+            if (std::strcmp(SymbolTable[i].symbol, objOperand) == 0) {
+                SymbolTable[i].base = 0;
+                break;
+            }
+        }
+    }
+    else if (strcmp(opcode, "WORD")){
+        //TODO implement later
+    }
+    else if (strcmp(opcode, "BYTE")){
+        //TODO implement later
+    }
+
+    printf("N:%i I:%i X:%i B:%i P:%i E:%i \n", nFlag,iFlag,xFlag,bFlag,pFlag,eFlag);
+
+
+
+
+
+
     return objOperand;
 }
+
 
 void processIntLine() {
     label[0] = '\0';
@@ -530,6 +597,7 @@ void PASS2(FILE *intFile, FILE *listFile) {
         if (line[0] == '.' || label[0] == '*') {
                 fgets(line, 36, intFile);
                 processIntLine();
+                continue;
         }
 
         if (strcmp(opcode, "RESW") == 0){
@@ -541,10 +609,6 @@ void PASS2(FILE *intFile, FILE *listFile) {
             // do nothing
             printf("Line: %s Opcode: %s - No obj code calculation needed\n",LC,opcode);
         }
-        else if (strcmp(opcode, "BASE") == 0){
-            // do nothing
-            printf("Line: %s Opcode: %s - No obj code calculation needed\n",LC,opcode);
-        }
         else {
             calculateObjectCode();
         }
@@ -552,7 +616,7 @@ void PASS2(FILE *intFile, FILE *listFile) {
         fgets(line, 36, intFile);
         processIntLine();
     }
-
+    fprintf(listFile, "%.*s", 35, line);
 
     fclose(intFile);
     fclose(listFile);
