@@ -27,7 +27,8 @@ struct SYMTAB{
 // struct for use in LiteralTable vector
 struct LITTAB{
     char literal[10];
-    int address;
+    char operand[6];
+    int address = 0;
     int length = 0;
 };
 
@@ -280,6 +281,20 @@ void checkLiteral() {
         LITTAB litTabObj;
         std::strcpy(litTabObj.literal, temp);
         litTabObj.address = locctr;
+
+        // convert each character in the literal's name to its hexadecimal representation
+        char formattedValue[sizeof(litTabObj.literal) * 2 + 1]; // double the size for hexadecimal representation, +1 for null terminator
+        int index = 0;
+        for (int i = 0; litTabObj.literal[i] != '\0'; ++i) {
+            // Format the character as hexadecimal and store it in formattedValue
+            snprintf(formattedValue + index, 3, "%02X", litTabObj.literal[i]);
+            index += 2; // move to the next position for the next hexadecimal character
+        }
+        formattedValue[index] = '\0'; // null terminate the string
+
+        // copy the formatted value into litTabObj.operand
+        std::strcpy(litTabObj.operand, formattedValue);
+
         litTabObj.length = literalLength;
         LiteralTable.push_back(litTabObj);
     }
@@ -343,12 +358,12 @@ void PASS1(FILE *input, FILE *inter) {
     for (int i = 0; i < SymbolTable.size(); ++i) {
         fprintf(symTab, "        %-*s%06X              R\n", 8, SymbolTable[i].symbol, SymbolTable[i].addr);
     }
-    // TODO add to pass 2
+    // print LiteralTable to file
     fprintf(symTab, "\nLiteralTable\n");
     fprintf(symTab, "Name    Operand Address Length:\n");
     fprintf(symTab, "---------------------------------------\n");
     for (int i = 0; i < LiteralTable.size(); ++i) {
-        fprintf(symTab, "%-*s------  %06X  %i\n", 8, LiteralTable[i].literal, LiteralTable[i].address, LiteralTable[i].length);
+        fprintf(symTab, "%-*s%-*s%06X  %i\n", 8, LiteralTable[i].literal,8,LiteralTable[i].operand, LiteralTable[i].address, LiteralTable[i].length);
     }
 
     fclose(inter);
@@ -602,16 +617,12 @@ std::string calculateObjectCode() {
 
             // check the LiteralTable
             for (auto& litTabObj : LiteralTable) {
-                if (std::strcmp(litTabObj.literal, temp) == 0) { // if a literal is found, calculate the objCode using its adress
-                    char formattedValue[6]; // pad with up to 5 zeros
-                    snprintf(formattedValue, sizeof(formattedValue), "%05X", litTabObj.address);
-
-                    // store the formatted value into objCode at indexes 3, 4, and 5
-                    objCode[3] = formattedValue[0];
-                    objCode[4] = formattedValue[1];
-                    objCode[5] = formattedValue[2];
-                    objCode[6] = formattedValue[3];
-                    objCode[7] = formattedValue[4];
+                if (std::strcmp(litTabObj.literal, temp) == 0) { // if a literal is found, set obj to its operand value
+                    objCode[3] = litTabObj.operand[0];
+                    objCode[4] = litTabObj.operand[1];
+                    objCode[5] = litTabObj.operand[2];
+                    objCode[6] = litTabObj.operand[3];
+                    objCode[7] = litTabObj.operand[4];
                     // null terminate objCode
                     objCode[8] = '\0';
                 }
