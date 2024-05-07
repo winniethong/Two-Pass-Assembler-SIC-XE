@@ -550,6 +550,14 @@ std::string calculateObjectCode() {
 
                 // calculate the difference using the location counter
                 int difference = symb.addr - locctrDecimal;
+                // if the difference is a negative number, use 2's complement
+                if (difference < 0) {
+                    // calculate the absolute value of the difference
+                    difference = -difference;
+                    // convert the absolute value to 2's complement
+                    difference = (1 << 12) - difference;
+                }
+
                 // format the difference with padded zeros up to 3 spaces
                 char formattedValue[4]; // 3 digits + '\0'
                 snprintf(formattedValue, sizeof(formattedValue), "%03X", difference);
