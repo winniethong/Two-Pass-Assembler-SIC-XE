@@ -1,3 +1,5 @@
+// Chloe Kershner - 826281307
+// Winnie Thong   - 
 #include <iostream>
 #include <fstream>
 #include <cstring>
@@ -27,7 +29,7 @@ struct SYMTAB{
 // struct for use in LiteralTable vector
 struct LITTAB{
     char literal[10];
-    char operand[6];
+    char operand[7];
     int address = 0;
     int length = 0;
 };
@@ -144,15 +146,19 @@ OPTAB generateOPTAB() {
     return opcodeTable;
 }
 
-// // function to calculate byte size for "BYTE" opcode
+// // function to calculate byte size for "BYTE" opcode or literals
 int calcByteSize(const std::string& op) {
     if (op.empty()) {
         return 0;
     }
     if (op[1] == 'C' || op[1] == 'c') {
-        return op.length() - 3;
-    } else {
-        return (op.length() - 3) / 2;
+        return op.length() - 4; // ignore =C'' chars
+    }
+    else if (op[1] == 'X' || op[1] == 'x') {
+        return 1;
+    }
+    else {
+        return (op.length() - 4) / 2;
     }
 }
 
@@ -170,6 +176,10 @@ void calcLocationCounter(){
         else if (!strcmp(opcode,"RESB"))locctr+=atoi(operand); // // else, check if it is "RESB" and update by the operand
         else if (!strcmp(opcode, "BYTE")) { // // if its "BYTE"
             length = calcByteSize(operand); // calculate the byte size and add to location counter
+            locctr += length;
+        }
+        else if (opcode[0] == '=') {
+            length = calcByteSize(opcode); // calculate the byte size and add to location counter
             locctr += length;
         }
     }
@@ -261,16 +271,15 @@ void checkLiteral() {
             break;
         }
         temp[i] = opcode[i + 3];
-        literalLength++;
     }
     temp[i] = '\0';
+    literalLength = calcByteSize(opcode);
 
     bool literalExists = false;
 
     // search for literal in LiteralTable
     for (auto& litTabObj : LiteralTable) {
         if (std::strcmp(litTabObj.literal, temp) == 0) {
-            litTabObj.address = -1;
             literalExists = true;
             break;
         }
@@ -280,7 +289,6 @@ void checkLiteral() {
     if (!literalExists) {
         LITTAB litTabObj;
         std::strcpy(litTabObj.literal, temp);
-        litTabObj.address = locctr;
 
         // convert each character in the literal's name to its hexadecimal representation
         char formattedValue[sizeof(litTabObj.literal) * 2 + 1]; // double the size for hexadecimal representation, +1 for null terminator
@@ -294,7 +302,7 @@ void checkLiteral() {
 
         // copy the formatted value into litTabObj.operand
         std::strcpy(litTabObj.operand, formattedValue);
-
+        litTabObj.address = locctr;
         litTabObj.length = literalLength;
         LiteralTable.push_back(litTabObj);
     }
@@ -320,10 +328,10 @@ void PASS1(FILE *input, FILE *inter) {
 
     // if opcode is "START" set location counter to operand and print the line to the intermediate file
     if(!strcmp(opcode,"START")) {
-        startAddress=atoi(operand);
+        startAddress = std::stoi(operand, nullptr, 16);
         locctr=startAddress;
         strcpy(programName, label);
-        fprintf(symTab, "%-*s          ", 14, label);  // add to symbol table
+        fprintf(symTab, "%-*s  %06X  ", 14, label, startAddress);  // add to symbol table
         flag = true; // set flag to true (used to determine if symbol table length needs to be calculated at the end)
         fprintf(inter,"%04X    %s",locctr, line); // print the line to the intermediate file
         fgets(line,28,input); // read and process the next line
@@ -341,6 +349,19 @@ void PASS1(FILE *input, FILE *inter) {
         // process the line
         processLine();
         if(opcode[0]=='=')checkLiteral(); // check for literals
+        else if (strcmp(opcode, "BYTE") == 0){
+            checkLabel();
+            char temp[8];
+            strcpy(temp,opcode);
+            opcode[0] = '=';
+            for (int i = 1; strlen(operand); i++) {
+                opcode[i] = operand[i-1];
+                opcode[i+1] = '\0';
+            }
+            checkLiteral();
+            strcpy(operand,opcode);
+            strcpy(opcode,temp);
+        }
         else if(label[0]!='\0')checkLabel(); // check for symbols
         fprintf(inter,"%04X    %s",locctr, line); // print line to intermediate file
         calcLocationCounter(); // update locctr (done after processing in order to print correctly)
@@ -363,7 +384,7 @@ void PASS1(FILE *input, FILE *inter) {
     fprintf(symTab, "Name    Operand Address Length:\n");
     fprintf(symTab, "---------------------------------------\n");
     for (int i = 0; i < LiteralTable.size(); ++i) {
-        fprintf(symTab, "%-*s%-*s%06X  %i\n", 8, LiteralTable[i].literal,8,LiteralTable[i].operand, LiteralTable[i].address, LiteralTable[i].length);
+        fprintf(symTab, "%-*s%-*s%04X    %i\n", 8, LiteralTable[i].literal,8,LiteralTable[i].operand, LiteralTable[i].address, LiteralTable[i].length);
     }
 
     fclose(inter);
@@ -426,7 +447,7 @@ std::string calculateObjectCode() {
     if (format == 3) {
         eFlag = 0;
     }
-    // if format 4, set flags accordingly
+        // if format 4, set flags accordingly
     else if (format == 4) {
         eFlag = 1;
         bFlag = 0;
@@ -557,7 +578,7 @@ std::string calculateObjectCode() {
                 // null terminate objCode
                 objCode[6] = '\0';
             }
-            // else if using pc relative addressing
+                // else if using pc relative addressing
             else if (pFlag == 1) {
                 int locctrDecimal = locctr;
                 char locctrHex[4];
@@ -585,7 +606,7 @@ std::string calculateObjectCode() {
                 // null terminate objCode
                 objCode[6] = '\0';
             }
-            // else, use the direct address provided for simple addressing
+                // else, use the direct address provided for simple addressing
             else {
                 // change the address in symbol to be padded with up to 5 zeros
                 char formattedValue[6];
@@ -602,7 +623,7 @@ std::string calculateObjectCode() {
             }
 
         }
-        // if not a symbol, check for a literal
+            // if not a symbol, check for a literal
         else if (operand[0] == '=') {
             char temp[8];
             int i;
@@ -618,11 +639,15 @@ std::string calculateObjectCode() {
             // check the LiteralTable
             for (auto& litTabObj : LiteralTable) {
                 if (std::strcmp(litTabObj.literal, temp) == 0) { // if a literal is found, set obj to its operand value
-                    objCode[3] = litTabObj.operand[0];
-                    objCode[4] = litTabObj.operand[1];
-                    objCode[5] = litTabObj.operand[2];
-                    objCode[6] = litTabObj.operand[3];
-                    objCode[7] = litTabObj.operand[4];
+                    char formattedValue[6];
+                    snprintf(formattedValue, sizeof(formattedValue), "%05X", litTabObj.address);
+
+                    // store the formatted value into objCode at indexes 3, 4, and 5
+                    objCode[3] = formattedValue[0];
+                    objCode[4] = formattedValue[1];
+                    objCode[5] = formattedValue[2];
+                    objCode[6] = formattedValue[3];
+                    objCode[7] = formattedValue[4];
                     // null terminate objCode
                     objCode[8] = '\0';
                 }
@@ -636,8 +661,8 @@ std::string calculateObjectCode() {
             objCode[6] = '\0';
         }
     }
-    // if opcode wasn't found
-    // check for "BASE"
+        // if opcode wasn't found
+        // check for "BASE"
     else if (strcmp(opcode, "BASE") == 0){
         for (int i = 0; i < SymbolTable.size(); ++i) {
             if (std::strcmp(SymbolTable[i].symbol, operand3) == 0) {
@@ -648,7 +673,7 @@ std::string calculateObjectCode() {
             }
         }
     }
-    // else, check for "NOBASE"
+        // else, check for "NOBASE"
     else if (strcmp(opcode, "NOBASE") == 0){
         for (int i = 0; i < SymbolTable.size(); ++i) {
             if (std::strcmp(SymbolTable[i].symbol, operand3) == 0) {
@@ -657,12 +682,6 @@ std::string calculateObjectCode() {
                 return objCode;
             }
         }
-    }
-    else if (strcmp(opcode, "WORD")){
-        //TODO implement later
-    }
-    else if (strcmp(opcode, "BYTE")){
-        //TODO implement later
     }
 
     // calculate the third number of the objCode
@@ -761,7 +780,7 @@ void PASS2(FILE *intFile, FILE *listFile) {
 
     // if opcode is "START" set location counter to operand and print to the intermediate file
     if (!strcmp(opcode, "START")) {
-        startAddress = atoi(operand);
+        startAddress = std::stoi(operand, nullptr, 16);
         locctr = startAddress;
         strcpy(programName, label);
         fprintf(listFile, "%s", line);
@@ -798,7 +817,30 @@ void PASS2(FILE *intFile, FILE *listFile) {
             // do nothing
             fprintf(listFile, "\n");
         }
-        // if the opcode is a literal
+        else if (strcmp(opcode, "WORD") == 0){
+            fprintf(listFile, " ");
+            // print hexadecimal representation of operand padded with up to 6 zeros
+            fprintf(listFile, "%06X", std::stoi(operand, nullptr, 10));
+            fprintf(listFile,"\n");
+        }
+        else if (strcmp(opcode, "BYTE") == 0){
+            fprintf(listFile, " ");
+            // check if it is a char literal
+            if (operand[0] == 'C') {
+                int i;
+                for (i = 2; operand[i] != '\''; ++i) {
+                    fprintf(listFile, "%02X", operand[i]); // print the hexadecimal representation directly to listFile
+                }
+            } // check if it is a hex literal
+            else if (operand[0] == 'X') {
+                int i;
+                for (i = 2; operand[i] != '\''; ++i) {
+                    fprintf(listFile, "%c", operand[i]); // print the literal directly to listFile
+                }
+            }
+            fprintf(listFile, "\n");
+        }
+            // if the opcode is a literal
         else if (opcode[0] == '=') {
             fprintf(listFile, " ");
             // check if it is a char literal
@@ -806,6 +848,13 @@ void PASS2(FILE *intFile, FILE *listFile) {
                 int i;
                 for (i = 3; opcode[i] != '\''; ++i) {
                     fprintf(listFile, "%02X", opcode[i]); // print the hexadecimal representation directly to listFile
+                }
+            }
+                // check if it is a hex literal
+            else if (opcode[1] == 'X') {
+                int i;
+                for (i = 3; opcode[i] != '\''; ++i) {
+                    fprintf(listFile, "%c", opcode[i]); // print the literal directly to listFile
                 }
             }
             fprintf(listFile, "\n");
