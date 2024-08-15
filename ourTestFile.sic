@@ -1,0 +1,10 @@
+. A2 CHLOE KERSHNER, WINNIE THONG cssc4063 CS530 SPRING 2024
+TEST      START   100
+BEGIN     LDA    #5
+          STA     ALPHA
+         +LDA     NTY
+          STCH    C1
+ALPHA     RESW    1
+C1        RESB    1
+NTY       BYTE    X'90'
+          END     BEGIN
